@@ -43,7 +43,8 @@ function workspaceName(folders, rules = [], onlyMatching = false) {
     }
   }
   if (onlyMatching || !folders.length) return null;
-  return sanitize(path.basename(folders[0].replace(/[\\/]+$/, '')));
+  // split on both separators: a Windows path is not split by path.basename on Linux
+  return sanitize(folders[0].replace(/[\\/]+$/, '').split(/[\\/]/).pop());
 }
 
 const sanitize = (s) => {
