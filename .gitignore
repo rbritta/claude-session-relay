@@ -1,0 +1,6 @@
+# Build output (ship via GitHub Releases and the Marketplace, not the repo)
+dist/
+*.vsix
+
+node_modules/
+__pycache__/

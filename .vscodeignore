@@ -1,0 +1,12 @@
+.github/**
+.vscode/**
+dist/**
+test/**
+tools/**
+docs/logo.png
+docs/BRANDING.md
+.editorconfig
+.gitattributes
+.gitignore
+install.ps1
+**/*.vsix
