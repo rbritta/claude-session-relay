@@ -109,7 +109,11 @@ Example: numbered work environments, and nothing else.
   unattended first turn, run it with `claude -p --session-id <uuid> "..."` and then
   `open` that session to continue it in the tab.
 - **Anyone who can write to the inbox can drive your tabs.** The inbox lives in your
-  user profile; do not point it at a shared or synced folder. See [SECURITY.md](SECURITY.md).
+  user profile (private to you on Linux and macOS); do not point it at a shared or synced
+  folder. See [SECURITY.md](SECURITY.md).
+- **Requests expire.** A request no window took within 5 minutes is answered `expired` and
+  not run, so opening a window later never replays old work. Unread replies are removed
+  after 10 minutes. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
 - **Rename needs an idle window.** It goes through the clipboard (restored afterwards)
   and a quick-pick, so it refuses while the window has focus; try again a minute later.
 - **Not an Anthropic product.** This is a community extension that uses the public
