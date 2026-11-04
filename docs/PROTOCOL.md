@@ -50,6 +50,16 @@ reads it and deletes it. `tabs` are the Claude Code tabs of the window after the
 
 A request nobody answers stays in the folder. The bundled `relay` client deletes its own
 request after `--timeout` seconds so a window opened later does not act on something old.
+Since 0.1.1 the window also refuses a request whose file is more than 5 minutes old: it is
+answered `{ "ok": false, "error": "expired: ..." }` and not run.
+
+Replies nobody read and leftover `.tmp` files older than 10 minutes are removed by the window.
+
+## Permissions
+
+On Linux and macOS the window creates `<root>` and `<workspace>` as `0700` (an existing
+`<workspace>` folder is narrowed to `0700`; a `<root>` you chose is left as it is) and writes its
+files as `0600`. On Windows the folders inherit the permissions of the user profile.
 
 ## Heartbeat
 
@@ -61,7 +71,7 @@ window closes cleanly:
   "workspace": "my-api",
   "folders": ["C:\\src\\My API"],
   "pid": 12345,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "account": "C:\\Users\\me\\.claude",
   "focused": false,
   "tabs": [{ "label": "Fix flaky tests", "active": true }],

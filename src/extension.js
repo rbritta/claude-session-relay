@@ -101,7 +101,9 @@ exports.activate = (ctx) => {
     return;
   }
   const dir = path.join(relay.expand(cfg.get('inbox', '')) || relay.defaultInbox(), name);
-  fs.mkdirSync(dir, { recursive: true });
+  // the root may be a folder the user chose: created private, but not narrowed
+  relay.ensurePrivateDir(path.dirname(dir), { narrow: false });
+  relay.ensurePrivateDir(dir);
   log.appendLine(`listening as "${name}" on ${dir}`);
 
   const beat = () => {
@@ -113,36 +115,30 @@ exports.activate = (ctx) => {
     } catch (e) { log.appendLine(`heartbeat: ${e.message}`); }
   };
 
+  const act = async (r) => {
+    await tidy();
+    await perform(r);
+    await wait(300);
+    await tidy();
+  };
   let busy = false;
   const round = async () => {
     if (busy) return;
     busy = true;
     try {
-      for (const f of relay.pending(dir)) {
-        const id = f.slice(0, -5);
-        const body = relay.claim(path.join(dir, f));
-        if (!body) continue;
-        let error = null;
-        let r = null;
-        try {
-          r = relay.parseRequest(body);
-          await tidy();
-          await perform(r);
-          await wait(300);
-          await tidy();
-        } catch (e) { error = e.message; }
-        log.appendLine(`${id} ${body.action}${error ? ` failed: ${error}` : ' ok'}`);
-        relay.writeAtomic(path.join(dir, `${id}${relay.REPLY}`), { ok: !error, error, tabs: tabs() });
-        beat();
-        if (!error && r.action === 'closeWindow') { await vscode.commands.executeCommand('workbench.action.closeWindow'); break; }
-      }
+      const next = await relay.serveOnce(dir, act, { tabs, log: (m) => log.appendLine(m), onReply: beat });
+      if (next === 'closeWindow') await vscode.commands.executeCommand('workbench.action.closeWindow');
     } catch (e) { log.appendLine(`round: ${e.message}`); }
     busy = false;
   };
+  const clean = () => {
+    try { for (const f of relay.sweep(dir)) log.appendLine(`removed unread ${f}`); } catch (e) { log.appendLine(`sweep: ${e.message}`); }
+  };
 
   beat();
+  clean();
   const t1 = setInterval(round, POLL_MS);
-  const t2 = setInterval(beat, BEAT_MS);
+  const t2 = setInterval(() => { beat(); clean(); }, BEAT_MS);
   ctx.subscriptions.push(log, { dispose: () => { clearInterval(t1); clearInterval(t2); try { fs.unlinkSync(path.join(dir, '.window.json')); } catch (_) { /* gone */ } } });
 };
 
