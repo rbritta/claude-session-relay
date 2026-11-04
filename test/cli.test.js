@@ -53,7 +53,7 @@ test('new: the request reaches the window and the reply comes back', async () =>
   assert.strictEqual(r.code, 0, r.stderr);
   assert.strictEqual(r.out.ok, true);
   assert.deepStrictEqual(r.out.tabs, [{ label: 'Tab', active: true }]);
-  assert.deepStrictEqual(w.seen, [{ action: 'new', session: null, prompt: 'Run the tests', name: null }]);
+  assert.deepStrictEqual(w.seen, [{ action: 'new', session: null, prompt: 'Run the tests', name: null, start: false }]);
   assert.deepStrictEqual(fs.readdirSync(w.dir), ['.window.json'], 'the client deletes the reply it read');
 });
 

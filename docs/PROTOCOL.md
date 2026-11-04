@@ -13,6 +13,8 @@ to it.
     .window.json                       heartbeat of the window listening here
     <id>.json                          a request
     <id>.done.json                     its reply
+    starts/                            auto-start: prompts waiting for a new conversation
+  hook.js                              auto-start: the hook Claude Code runs (a copy kept by the extension)
 ```
 
 - **`<workspace>`** is the window's name: the first `claudeSessionRelay.workspaces` rule
@@ -31,8 +33,9 @@ to it.
 |---|---|---|
 | `action` | all | `new`, `open`, `close`, `rename`, `tabs`, `closeWindow` |
 | `session` | `open`, `close`, `rename` | Claude Code session id (a UUID). `open` without it is `new`. |
-| `prompt` | `new`, `open` | Text typed into the conversation's input box. Not sent. |
+| `prompt` | `new`, `open` | Text typed into the conversation's input box. Not sent, unless `start`. |
 | `name` | `rename` | The new tab title. |
+| `start` | `new` | `true` sends `prompt` instead of typing it: the conversation starts working on its own. Needs a prompt and the auto-start hook (see [Auto-start](#auto-start)). |
 
 Write it atomically - to `<id>.json.tmp`, then rename to `<id>.json` - so the window
 never reads half a file. (A half-written file is left alone and retried on the next
@@ -55,6 +58,39 @@ answered `{ "ok": false, "error": "expired: ..." }` and not run.
 
 Replies nobody read and leftover `.tmp` files older than 10 minutes are removed by the window.
 
+A `new` with `start` adds what happened to the prompt:
+
+```json
+{ "ok": true, "error": null, "started": true, "session": "3007172c-30ed-48a3-a551-fc7a288b219d", "tabs": [...] }
+```
+
+| `started` | |
+|---|---|
+| `true` | The conversation `session` received the prompt and is working on it. |
+| `false` | The auto-start hook is not installed: the prompt was typed in, as without `start`, and `note` says how to install the hook. |
+
+If the hook is installed but no new conversation took the prompt within 30 seconds, the
+reply is `{ "ok": false, "error": "the new conversation did not pick up the prompt..." }`
+and the prompt is withdrawn. A client waiting for a `start` should allow about 45 seconds.
+
+## Auto-start
+
+Claude Code hooks are commands Claude Code runs at fixed moments. Auto-start uses two of
+them, both `node "<root>/hook.js" ...`, written to Claude Code's user settings by
+*Claude Session Relay: Install auto-start hook* or `relay hook install`:
+
+| Step | Who | What |
+|---|---|---|
+| 1 | window | Writes `<workspace>/starts/p-<id>.json` (`{ request, prompt, at }`) and opens an empty Claude tab. |
+| 2 | `hook.js start` (`SessionStart`, source `startup` only) | In the new conversation: finds the window whose folder holds its working directory, renames the oldest prompt younger than 2 minutes to `starts/<session>.json` (the rename is the claim), writes `starts/p-<id>.sid` with the session id and returns `watchPaths` with that file. A detached `hook.js touch` rewrites the file 3, 8 and 20 seconds later, once Claude Code watches it. |
+| 3 | `hook.js wake` (`FileChanged`, `asyncRewake`) | Sees its own `starts/<session>.json`, deletes it and exits 2 with the prompt on stderr: Claude Code hands it to the conversation as the thing to work on. |
+| 4 | window | Reads `p-<id>.sid`, deletes it and replies `started: true` with the session. |
+
+Every command carries the tag `#claude-session-relay` at the end (a comment in a POSIX
+shell, an ignored argument elsewhere); it is how `install` and `remove` find their own
+entries without touching anything else. Removing the hook leaves `hook.js` in the root; it
+does nothing unless the settings call it.
+
 ## Permissions
 
 On Linux and macOS the window creates `<root>` and `<workspace>` as `0700` (an existing
@@ -71,7 +107,7 @@ window closes cleanly:
   "workspace": "my-api",
   "folders": ["C:\\src\\My API"],
   "pid": 12345,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "account": "C:\\Users\\me\\.claude",
   "focused": false,
   "tabs": [{ "label": "Fix flaky tests", "active": true }],

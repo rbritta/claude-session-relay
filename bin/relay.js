@@ -5,28 +5,35 @@
  * inbox and wait for its reply. No dependencies.
  *
  *   relay list
- *   relay new   <workspace> [--prompt "text"]
+ *   relay new   <workspace> [--prompt "text"] [--start]
  *   relay open  <workspace> <session> [--prompt "text"]
  *   relay close <workspace> <session>
  *   relay rename <workspace> <session> <name>
  *   relay tabs  <workspace>
  *   relay close-window <workspace>
+ *   relay hook install | remove | status
  *
- * Options: --inbox <dir> (default: the extension's default), --timeout <seconds> (default 15),
+ * --start sends the prompt instead of typing it in: the conversation starts
+ * working on its own. It needs the auto-start hook (`relay hook install`, or the
+ * command "Claude Session Relay: Install auto-start hook" in VS Code).
+ *
+ * Options: --inbox <dir> (default: the extension's default), --timeout <seconds> (default 15, 45 with --start),
  * --no-wait (drop the request and exit). Prints the reply as JSON; exits 1 when it failed.
  */
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const relay = require('../src/relay');
+const installer = require('../src/install');
 
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); if (i < 0) return d; const v = args[i + 1]; args.splice(i, 2); return v; };
 const flag = (k) => { const i = args.indexOf(k); if (i < 0) return false; args.splice(i, 1); return true; };
 
 const inbox = relay.expand(opt('--inbox', '')) || relay.defaultInbox();
-const timeout = Number(opt('--timeout', 15)) * 1000;
 const prompt = opt('--prompt', null);
+const start = flag('--start');
+const timeout = Number(opt('--timeout', start ? 45 : 15)) * 1000;
 const noWait = flag('--no-wait');
 const [cmd, workspace, ...rest] = args;
 
@@ -65,17 +72,24 @@ async function send(body) {
 }
 
 (async () => {
-  if (cmd && cmd !== 'list' && !workspace) fail('which workspace? see `relay list`');
+  if (cmd && !['list', 'hook'].includes(cmd) && !workspace) fail('which workspace? see `relay list`');
   let out;
   switch (cmd) {
     case 'list': out = list(); break;
-    case 'new': out = await send({ action: 'new', prompt }); break;
+    case 'new': out = await send({ action: 'new', prompt, ...(start ? { start: true } : {}) }); break;
     case 'open': out = await send({ action: 'open', session: rest[0], prompt }); break;
     case 'close': out = await send({ action: 'close', session: rest[0] }); break;
     case 'rename': out = await send({ action: 'rename', session: rest[0], name: rest.slice(1).join(' ') }); break;
     case 'tabs': out = await send({ action: 'tabs' }); break;
     case 'close-window': out = await send({ action: 'closeWindow' }); break;
-    default: fail('usage: relay list | new|tabs|close-window <workspace> | open|close <workspace> <session> | rename <workspace> <session> <name>  [--prompt text] [--inbox dir] [--timeout s] [--no-wait]');
+    case 'hook':
+      // here `workspace` is the subcommand
+      if (workspace === 'install') out = installer.install({ inbox });
+      else if (workspace === 'remove') out = installer.uninstall();
+      else if (workspace === 'status') out = installer.status();
+      else fail('usage: relay hook install | remove | status');
+      break;
+    default: fail('usage: relay list | new|tabs|close-window <workspace> | open|close <workspace> <session> | rename <workspace> <session> <name> | hook install|remove|status  [--prompt text] [--start] [--inbox dir] [--timeout s] [--no-wait]');
   }
   console.log(JSON.stringify(out, null, 2));
   process.exit(out && out.ok === false ? 1 : 0);

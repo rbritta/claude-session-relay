@@ -1,8 +1,8 @@
 {
   "name": "claude-session-relay",
   "displayName": "Claude Session Relay",
-  "description": "Drive the Claude Code tabs of any VS Code window from a script or a web panel: open, resume, start with a prompt, rename and close sessions through a plain file inbox.",
-  "version": "0.1.1",
+  "description": "Drive the Claude Code tabs of any VS Code window from a script or a web panel: open, resume, start a conversation that runs its prompt on its own, rename and close sessions through a plain file inbox.",
+  "version": "0.2.0",
   "publisher": "rbritta",
   "license": "MIT",
   "icon": "docs/icon.png",
@@ -17,6 +17,10 @@
   "activationEvents": ["onStartupFinished"],
   "extensionDependencies": [],
   "contributes": {
+    "commands": [
+      { "command": "claudeSessionRelay.installHook", "title": "Install auto-start hook", "category": "Claude Session Relay" },
+      { "command": "claudeSessionRelay.uninstallHook", "title": "Remove auto-start hook", "category": "Claude Session Relay" }
+    ],
     "configuration": {
       "title": "Claude Session Relay",
       "properties": {
@@ -57,7 +61,7 @@
     }
   },
   "scripts": {
-    "test": "node test/relay.test.js && node test/cli.test.js",
+    "test": "node test/relay.test.js && node test/cli.test.js && node test/hook.test.js",
     "build": "node tools/build.js"
   }
 }

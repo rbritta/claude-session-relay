@@ -13,7 +13,7 @@ const zlib = require('zlib');
 
 const ROOT = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const FILES = ['package.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'docs/icon.png', 'src/extension.js', 'src/relay.js', 'bin/relay.js'];
+const FILES = ['package.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'docs/icon.png', 'src/extension.js', 'src/relay.js', 'src/hook.js', 'src/install.js', 'bin/relay.js'];
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const manifest = `<?xml version="1.0" encoding="utf-8"?>

@@ -34,7 +34,11 @@ test('the account filter reads CLAUDE_CONFIG_DIR', () => {
 });
 
 test('requests are validated', () => {
-  assert.deepStrictEqual(relay.parseRequest({ action: 'new', prompt: 'hi' }), { action: 'new', session: null, prompt: 'hi', name: null });
+  assert.deepStrictEqual(relay.parseRequest({ action: 'new', prompt: 'hi' }), { action: 'new', session: null, prompt: 'hi', name: null, start: false });
+  assert.strictEqual(relay.parseRequest({ action: 'new', prompt: 'go', start: true }).start, true);
+  assert.strictEqual(relay.parseRequest({ action: 'open', prompt: 'go', start: true }).action, 'new');
+  assert.throws(() => relay.parseRequest({ action: 'new', start: true }), /needs a prompt/);
+  assert.throws(() => relay.parseRequest({ action: 'open', session: SID, prompt: 'go', start: true }), /only for a new/);
   assert.strictEqual(relay.parseRequest({ action: 'open' }).action, 'new');
   assert.strictEqual(relay.parseRequest({ action: 'open', session: SID }).action, 'open');
   assert.throws(() => relay.parseRequest({ action: 'close' }), /needs a session/);
@@ -155,6 +159,15 @@ test('inbox folders and files are private to their owner (Linux, macOS)', () => 
   relay.writeAtomic(path.join(ws, 'x.json'), {});
   assert.strictEqual(fs.statSync(path.join(ws, 'x.json')).mode & 0o077, 0);
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('the reply carries what the action returned', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'csr-'));
+  relay.writeAtomic(path.join(dir, '1-a.json'), { action: 'new', prompt: 'go', start: true });
+  await relay.serveOnce(dir, async (r, id) => ({ started: true, session: SID, request: id }));
+  const rep = JSON.parse(fs.readFileSync(path.join(dir, '1-a.done.json'), 'utf8'));
+  assert.deepStrictEqual([rep.ok, rep.started, rep.session, rep.request], [true, true, SID, '1-a']);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 (async () => {

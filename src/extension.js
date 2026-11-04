@@ -8,16 +8,18 @@
  * window watches an inbox folder named after its workspace and acts on the JSON
  * requests dropped there:
  *
- *   <inbox>/<workspace>/<id>.json         { action, session?, prompt?, name? }   the request
- *   <inbox>/<workspace>/<id>.done.json    { ok, error?, tabs }                   the reply
+ *   <inbox>/<workspace>/<id>.json         { action, session?, prompt?, name?, start? }   the request
+ *   <inbox>/<workspace>/<id>.done.json    { ok, error?, started?, session?, tabs }       the reply
  *   <inbox>/<workspace>/.window.json      who is listening, refreshed every few seconds
+ *   <inbox>/<workspace>/starts/           prompts waiting for a new conversation (auto-start)
  *
- * See docs/PROTOCOL.md.
+ * See docs/PROTOCOL.md and, for auto-start, src/hook.js.
  */
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const relay = require('./relay');
+const installer = require('./install');
 
 const VERSION = require('../package.json').version;
 const POLL_MS = 1000;
@@ -76,11 +78,24 @@ async function rename(sid, name) {
   if (l !== name && !(l.endsWith('…') && name.startsWith(l.slice(0, -1)))) throw new Error(`the tab reads "${l}"`);
 }
 
-async function perform(r) {
+/*
+ * A new conversation that starts on its own: needs the auto-start hook in
+ * Claude Code's settings. Without it, the prompt is typed in as before and the
+ * reply says so, so the client can tell the user to press Enter.
+ */
+async function startNew(r, id, dir) {
+  if (!installer.status().installed) {
+    await openSession(undefined, r.prompt);
+    return { started: false, note: 'auto-start hook not installed: the prompt is typed in, press Enter (command "Claude Session Relay: Install auto-start hook")' };
+  }
+  return relay.startConversation(dir, id, r.prompt, () => openSession(undefined, undefined));
+}
+
+async function perform(r, id, dir) {
   switch (r.action) {
     case 'open': return openSession(r.session, r.prompt || undefined);
-    // a new conversation, with the prompt typed in its input box (the user presses Enter)
-    case 'new': return openSession(undefined, r.prompt || undefined);
+    // a new conversation: with start, the prompt is sent; without, typed in its input box (the user presses Enter)
+    case 'new': return r.start ? startNew(r, id, dir) : openSession(undefined, r.prompt || undefined);
     case 'close': { await openSession(r.session); const t = await frontTab(); return vscode.window.tabGroups.close(t); }
     case 'rename': return rename(r.session, r.name);
     case 'tabs': return null;
@@ -91,6 +106,19 @@ async function perform(r) {
 
 exports.activate = (ctx) => {
   const cfg = vscode.workspace.getConfiguration('claudeSessionRelay');
+  ctx.subscriptions.push(log);
+  // the hook runs from a copy next to the inbox: keep it current with this version
+  const inboxRoot = relay.expand(cfg.get('inbox', '')) || relay.defaultInbox();
+  try { if (installer.status().installed) installer.refreshHook(inboxRoot); } catch (e) { log.appendLine(`hook refresh: ${e.message}`); }
+  const say = (r) => vscode.window.showInformationMessage(r.changed
+    ? `Claude Session Relay: auto-start hook ${r.installed ? 'installed' : 'removed'} in ${r.settings}${r.backup ? ` (backup: ${r.backup})` : ''}. New conversations pick it up.`
+    : `Claude Session Relay: the auto-start hook was already ${r.installed ? 'installed' : 'absent'} in ${r.settings}.`);
+  const guard = (fn) => () => { try { say(fn()); } catch (e) { vscode.window.showErrorMessage(`Claude Session Relay: ${e.message}`); } };
+  ctx.subscriptions.push(
+    vscode.commands.registerCommand('claudeSessionRelay.installHook', guard(() => installer.install({ inbox: inboxRoot }))),
+    vscode.commands.registerCommand('claudeSessionRelay.uninstallHook', guard(() => installer.uninstall())),
+  );
+
   if (!cfg.get('enabled', true)) return;
   const folders = (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
   const name = relay.workspaceName(folders, cfg.get('workspaces', []), cfg.get('onlyMatchingWorkspaces', false));
@@ -100,7 +128,7 @@ exports.activate = (ctx) => {
     log.appendLine(`${name}: CLAUDE_CONFIG_DIR "${process.env.CLAUDE_CONFIG_DIR || ''}" does not match "${account}", not listening`);
     return;
   }
-  const dir = path.join(relay.expand(cfg.get('inbox', '')) || relay.defaultInbox(), name);
+  const dir = path.join(inboxRoot, name);
   // the root may be a folder the user chose: created private, but not narrowed
   relay.ensurePrivateDir(path.dirname(dir), { narrow: false });
   relay.ensurePrivateDir(dir);
@@ -115,11 +143,12 @@ exports.activate = (ctx) => {
     } catch (e) { log.appendLine(`heartbeat: ${e.message}`); }
   };
 
-  const act = async (r) => {
+  const act = async (r, id) => {
     await tidy();
-    await perform(r);
+    const out = await perform(r, id, dir);
     await wait(300);
     await tidy();
+    return out;
   };
   let busy = false;
   const round = async () => {
@@ -139,7 +168,7 @@ exports.activate = (ctx) => {
   clean();
   const t1 = setInterval(round, POLL_MS);
   const t2 = setInterval(() => { beat(); clean(); }, BEAT_MS);
-  ctx.subscriptions.push(log, { dispose: () => { clearInterval(t1); clearInterval(t2); try { fs.unlinkSync(path.join(dir, '.window.json')); } catch (_) { /* gone */ } } });
+  ctx.subscriptions.push({ dispose: () => { clearInterval(t1); clearInterval(t2); try { fs.unlinkSync(path.join(dir, '.window.json')); } catch (_) { /* gone */ } } });
 };
 
 exports.deactivate = () => {};

@@ -59,8 +59,9 @@ function accountMatches(pattern, configDir = process.env.CLAUDE_CONFIG_DIR || ''
 }
 
 /**
- * A request, validated. Returns `{ action, session, prompt, name }` or throws.
- * `open` without a session is the same as `new`.
+ * A request, validated. Returns `{ action, session, prompt, name, start }` or throws.
+ * `open` without a session is the same as `new`. `start` (only for a new
+ * conversation with a prompt) sends the prompt instead of just typing it in.
  */
 function parseRequest(p) {
   if (!p || typeof p !== 'object') throw new Error('request is not an object');
@@ -72,7 +73,11 @@ function parseRequest(p) {
   const prompt = p.prompt == null ? null : String(p.prompt);
   const name = p.name == null ? null : String(p.name).trim();
   if (action === 'rename' && !name) throw new Error('rename needs a name');
-  return { action: action === 'open' && !session ? 'new' : action, session, prompt, name };
+  const act = action === 'open' && !session ? 'new' : action;
+  const start = p.start === true;
+  if (start && act !== 'new') throw new Error('start is only for a new conversation');
+  if (start && !(prompt || '').trim()) throw new Error('start needs a prompt');
+  return { action: act, session, prompt, name, start };
 }
 
 /** Request files waiting in a workspace's inbox, oldest id first. */
@@ -130,7 +135,8 @@ function claim(file) {
 
 /**
  * One pass over a workspace's inbox: claims each request in id order, runs it
- * through `perform` and writes the reply. A request older than `staleMs` is
+ * through `perform` and writes the reply (with whatever object `perform`
+ * returns, such as the session a started conversation got). A request older than `staleMs` is
  * answered with an error and not run, so a window opened later does not act on
  * something its client gave up on. Returns `'closeWindow'` when a close-window
  * request succeeded: its reply is already written and the rest waits for the
@@ -146,20 +152,48 @@ async function serveOnce(dir, perform, { tabs = () => [], log = () => {}, onRepl
     if (!body) continue;
     let error = null;
     let r = null;
+    let result = null;
     try {
       r = parseRequest(body);
       if (age > staleMs) throw new Error(`expired: waited ${Math.round(age / 1000)}s for a window`);
-      await perform(r);
+      result = await perform(r, id);
     } catch (e) { error = e.message; }
     log(`${id} ${body.action}${error ? ` failed: ${error}` : ' ok'}`);
-    writeAtomic(path.join(dir, `${id}${REPLY}`), { ok: !error, error, tabs: tabs() });
+    const extra = result && typeof result === 'object' && !Array.isArray(result) ? result : {};
+    writeAtomic(path.join(dir, `${id}${REPLY}`), { ok: !error, error, ...extra, tabs: tabs() });
     onReply();
     if (!error && r.action === 'closeWindow') return 'closeWindow';
   }
   return null;
 }
 
+/**
+ * Starts a new conversation with `prompt` already sent: leaves the prompt in
+ * <dir>/starts/p-<id>.json, opens an empty tab with `openTab` and waits for the
+ * auto-start hook (src/hook.js) running in the new conversation to claim it.
+ * Resolves `{ started: true, session }`; throws when no conversation took it in
+ * `waitMs` (the prompt is withdrawn, so a later conversation does not get it).
+ */
+async function startConversation(dir, id, prompt, openTab, { waitMs = 30000, pollMs = 250 } = {}) {
+  const starts = path.join(dir, 'starts');
+  ensurePrivateDir(starts);
+  const pendingFile = path.join(starts, `p-${id}.json`);
+  const sidFile = path.join(starts, `p-${id}.sid`);
+  writeAtomic(pendingFile, { request: id, prompt, at: new Date().toISOString() });
+  await openTab();
+  const end = Date.now() + waitMs;
+  while (Date.now() < end) {
+    await new Promise((r) => setTimeout(r, pollMs));
+    let session = null;
+    try { session = fs.readFileSync(sidFile, 'utf8').trim(); } catch (_) { continue; }
+    try { fs.unlinkSync(sidFile); } catch (_) { /* gone */ }
+    return { started: true, session };
+  }
+  try { fs.unlinkSync(pendingFile); } catch (_) { /* claimed at the last moment */ }
+  throw new Error(`the new conversation did not pick up the prompt in ${Math.round(waitMs / 1000)}s (is the auto-start hook installed? see "relay hook status")`);
+}
+
 module.exports = {
   UUID, ACTIONS, REPLY, STALE_REQUEST_MS, STALE_REPLY_MS,
-  defaultInbox, expand, workspaceName, accountMatches, parseRequest, pending, writeAtomic, ensurePrivateDir, claim, sweep, serveOnce,
+  defaultInbox, expand, workspaceName, accountMatches, parseRequest, pending, writeAtomic, ensurePrivateDir, claim, sweep, serveOnce, startConversation,
 };

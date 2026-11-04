@@ -8,9 +8,14 @@
   of the machine cannot write to. Do not point `claudeSessionRelay.inbox` at a shared,
   synced or network folder. On Linux and macOS each window's folder and files are private to
   their owner (`0700` / `0600`).
-- **Prompts are typed, never sent.** A request can put text in the input box, but a person
-  presses Enter. The extension never submits a turn, approves a tool or answers a
-  permission prompt.
+- **Prompts are typed, not sent - unless you install auto-start.** By default a request can
+  put text in the input box, but a person presses Enter. The opt-in auto-start hook changes
+  that for `new` with `"start": true`: the prompt is handed to the new conversation, which
+  starts working. With it installed, whoever can write to the inbox can start Claude Code
+  turns as you, with your permission settings. Install it only if you trust everything that
+  writes there. The hook itself reads only the inbox, acts only in a conversation that was
+  just opened with a prompt waiting for it, and never approves a tool or answers a
+  permission prompt. Remove it with `relay hook remove`.
 - Requests are validated before anything runs: the action must be one of the known six, the
   session must be a UUID, and nothing in a request is executed as a command or a path.
 - `rename` borrows the clipboard for a moment and puts the previous text back.

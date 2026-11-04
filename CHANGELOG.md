@@ -8,6 +8,18 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _No unreleased changes yet._
 
+## [0.2.0] - 2026-11-04
+
+### Added
+- **Auto-start.** `new` with `"start": true` sends the prompt instead of typing it in: the
+  conversation starts working on its own, and the reply carries `started` and the new
+  `session` id. It works through an opt-in Claude Code hook (`src/hook.js`), installed with the
+  command *Claude Session Relay: Install auto-start hook* or `relay hook install`, and removed
+  the same way. The hook acts only in a conversation that was just opened with a prompt waiting
+  for it; everything else finds nothing to do.
+- `relay new ... --start` and `relay hook install | remove | status`.
+- A reply can carry what the action returned (`started`, `session`, `note`).
+
 ## [0.1.1] - 2026-11-04
 
 ### Security
