@@ -22,6 +22,12 @@
  *      is never removed, since Claude Code's one watcher per conversation is
  *      shared with any other tool's hook; delivered files go after 7 days.
  *
+ * With ai-threads (setting claudeSessionRelay.aiThreadsHome, kept by the window
+ * in <inbox>/ai-threads.json) and its hooks installed for this Claude account,
+ * step 2 hands the prompt to ai-threads instead, and steps 3 and 4 are its own:
+ * one tool arms the watch and delivers in a conversation. Without it, or if the
+ * handoff fails, the relay delivers by itself as above.
+ *
  * Conversations you open yourself never find a file to claim, so the hook does
  * nothing in them. It needs only Node and reads the inbox it lives in (the
  * window keeps a copy at <inbox>/hook.js); RELAY_INBOX overrides that.
@@ -87,13 +93,50 @@ function claimStart(cwd, sid, { root = ROOT, now = Date.now() } = {}) {
   return null;
 }
 
-/** SessionStart: claim a start, watch it, and have it touched once the watcher is up. */
+/** The file where the window says which ai-threads home to hand prompts to. */
+const HANDOFF = 'ai-threads.json';
+
+/**
+ * ai-threads, when the window named a home and its hooks are installed for the Claude account this
+ * conversation runs in (they are what arms the watch and delivers). Null otherwise.
+ */
+function aiThreads(root = ROOT, { load = require } = {}) {
+  const cfg = readJson(path.join(root, HANDOFF));
+  const home = cfg && typeof cfg.home === 'string' && cfg.home.trim();
+  if (!home) return null;
+  try {
+    const lib = load(path.join(home, 'runtime'));
+    if (!lib.claudeCode.install.status({}).installed) return null;
+    return lib.open({ home });
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Hands a claimed start to ai-threads, marked delivered here. False when that did not work. */
+function handOff(file, sid, at) {
+  const body = readJson(file);
+  const prompt = body && String(body.prompt || '').trim();
+  if (!prompt) return false;
+  try {
+    at.deliverSync(sid, prompt, { thread: false, retouch: true, from: 'app', meta: { via: 'claude-session-relay', request: body.request || null } });
+  } catch (_) {
+    return false;
+  }
+  try { fs.closeSync(fs.openSync(claimedOf(file), 'wx')); } catch (_) { /* marked already */ }
+  try { fs.writeFileSync(file, '{}'); } catch (_) { /* the marker says it was delivered */ }
+  return true;
+}
+
+/** SessionStart: claim a start, then hand it to ai-threads, or watch it and have it touched once the watcher is up. */
 function start(input, opts = {}) {
   const sid = input.session_id;
   // only a conversation that was just born; never a resumed one, a /clear, a compaction or a subagent
   if (!sid || input.agent_id || (input.source && input.source !== 'startup')) return null;
   const file = claimStart(input.cwd || process.cwd(), sid, opts);
   if (!file) return null;
+  const at = opts.aiThreads !== undefined ? opts.aiThreads : aiThreads(opts.root || ROOT);
+  if (at && handOff(file, sid, at)) return null; // ai-threads' own start hook watches its signal
   if (!opts.noTouch) {
     spawn(process.execPath, [__filename, 'touch', file], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   }
@@ -173,4 +216,4 @@ if (require.main === module) {
   } catch (_) { /* a hook never breaks the conversation it runs in */ }
 }
 
-module.exports = { PENDING, FRESH_MS, DELIVERED_MS, workspaceFor, claimStart, start, wake, touch, pruneDelivered };
+module.exports = { PENDING, FRESH_MS, DELIVERED_MS, HANDOFF, workspaceFor, claimStart, aiThreads, handOff, start, wake, touch, pruneDelivered };

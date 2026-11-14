@@ -89,6 +89,13 @@ them, both `node "<root>/hook.js" ...`, written to Claude Code's user settings b
 | 3 | `hook.js wake` (`FileChanged`, `asyncRewake`) | Sees its own `starts/<session>.json`, creates `starts/<session>.claimed` exclusively (the claim), rewrites the file in place as `{}` and exits 2 with the prompt on stderr: Claude Code hands it to the conversation as the thing to work on. The watched file is never removed or renamed, because Claude Code keeps one watcher per conversation, shared with other tools' hooks. A delivered file and its marker are removed after 7 days, the next time a start is claimed in that window. |
 | 4 | window | Reads `p-<id>.sid`, deletes it and replies `started: true` with the session. |
 
+**Handoff to ai-threads.** When `<root>/ai-threads.json` (`{ "home": "<ai-threads home>" }`, kept by the
+window from the setting `claudeSessionRelay.aiThreadsHome`) names a home whose `runtime/` loads and whose
+hooks are installed for the conversation's Claude account, step 2 still claims the prompt and writes the
+`.sid`, then queues the prompt with ai-threads (`deliverSync(session, prompt, { thread: false, retouch: true })`),
+creates the `.claimed` marker, empties the file and returns no `watchPaths`: ai-threads' own start hook watches
+its signal and delivers. If any of that fails, step 2 goes on as in the table.
+
 Every command carries the tag `#claude-session-relay` at the end (a comment in a POSIX
 shell, an ignored argument elsewhere); it is how `install` and `remove` find their own
 entries without touching anything else. Removing the hook leaves `hook.js` in the root; it

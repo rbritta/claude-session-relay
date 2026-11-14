@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const relay = require('./relay');
 const installer = require('./install');
+const { HANDOFF } = require('./hook');
 
 const VERSION = require('../package.json').version;
 const POLL_MS = 1000;
@@ -110,6 +111,20 @@ exports.activate = (ctx) => {
   // the hook runs from a copy next to the inbox: keep it current with this version
   const inboxRoot = relay.expand(cfg.get('inbox', '')) || relay.defaultInbox();
   try { if (installer.status().installed) installer.refreshHook(inboxRoot); } catch (e) { log.appendLine(`hook refresh: ${e.message}`); }
+  // ai-threads takes the auto-start prompts when its home is set (src/hook.js). Windows of another
+  // Claude account may share the inbox without the setting, so only a change to empty removes the file.
+  const handoffFile = path.join(inboxRoot, HANDOFF);
+  const syncHandoff = (changed) => {
+    const home = relay.expand(vscode.workspace.getConfiguration('claudeSessionRelay').get('aiThreadsHome', ''));
+    try {
+      if (home) { relay.ensurePrivateDir(inboxRoot, { narrow: false }); relay.writeAtomic(handoffFile, { home }); }
+      else if (changed && fs.existsSync(handoffFile)) fs.unlinkSync(handoffFile);
+    } catch (e) { log.appendLine(`ai-threads handoff: ${e.message}`); }
+  };
+  syncHandoff(false);
+  ctx.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('claudeSessionRelay.aiThreadsHome')) syncHandoff(true);
+  }));
   const say = (r) => vscode.window.showInformationMessage(r.changed
     ? `Claude Session Relay: auto-start hook ${r.installed ? 'installed' : 'removed'} in ${r.settings}${r.backup ? ` (backup: ${r.backup})` : ''}. New conversations pick it up.`
     : `Claude Session Relay: the auto-start hook was already ${r.installed ? 'installed' : 'absent'} in ${r.settings}.`);

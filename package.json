@@ -2,7 +2,7 @@
   "name": "claude-session-relay",
   "displayName": "Claude Session Relay",
   "description": "Drive the Claude Code tabs of any VS Code window from a script or a web panel: open, resume, start a conversation that runs its prompt on its own, rename and close sessions through a plain file inbox.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "rbritta",
   "license": "MIT",
   "icon": "docs/icon.png",
@@ -56,6 +56,11 @@
           "type": "string",
           "default": "",
           "description": "Only listen when CLAUDE_CONFIG_DIR matches this regex (to keep one Claude account apart from another). Empty: any."
+        },
+        "claudeSessionRelay.aiThreadsHome": {
+          "type": "string",
+          "default": "",
+          "description": "Home folder of ai-threads. When set, and its hooks are installed for the conversation's Claude account, auto-start hands the prompt to ai-threads, which then arms the watch and delivers. Empty: the relay delivers by itself. ~ and %VAR% are expanded."
         }
       }
     }

@@ -93,6 +93,12 @@ uses that, and nothing else.
    watched file that disappears can take it down. Delivered files are cleaned up after 7 days.
 4. The reply says `"started": true` and the new `"session"` id.
 
+**With [ai-threads](https://github.com/rbritta/ai-threads):** set `claudeSessionRelay.aiThreadsHome`
+to its home folder. When its hooks are installed for the Claude account the conversation runs in,
+step 2 hands the prompt to ai-threads' inbox for that session and steps 3 and 4 are ai-threads' own,
+so a single tool arms the watch and delivers in each conversation. Without the setting, without its
+hooks, or if the handoff fails, the relay delivers by itself as above.
+
 **What the installer changes:** two entries in Claude Code's user settings
 (`~/.claude/settings.json`, or `$CLAUDE_CONFIG_DIR/settings.json`), added after your own
 hooks and tagged `#claude-session-relay`:

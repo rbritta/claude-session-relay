@@ -8,6 +8,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _No unreleased changes yet._
 
+## [0.3.0] - 2026-11-14
+
+### Added
+- **Auto-start can hand its prompt to [ai-threads](https://github.com/rbritta/ai-threads).** With the new
+  setting `claudeSessionRelay.aiThreadsHome` and ai-threads' hooks installed for the conversation's Claude
+  account, the start hook queues the claimed prompt in ai-threads' inbox for that session instead of arming a
+  watch of its own, so one tool arms the watch and delivers in each conversation. Without the setting or the
+  hooks, or if the handoff fails, auto-start works as before.
+
 ## [0.2.1] - 2026-11-14
 
 ### Fixed

@@ -116,6 +116,52 @@ test('delivered start files go after 7 days, fresh ones and waiting prompts stay
     'the delivered file and its marker went, the waiting prompt stayed');
 });
 
+test('with ai-threads, start hands the claimed prompt over, marks it delivered and arms no watch of its own', () => {
+  const ib = inbox();
+  leave(ib, '1-a', 'Run the tests');
+  const sent = [];
+  const at = { deliverSync: (sid, text, opts) => { sent.push([sid, text, opts]); return { id: 'm1' }; } };
+  const out = hook.start({ session_id: SID, cwd: ib.project, source: 'startup' }, { root: ib.root, noTouch: true, aiThreads: at });
+  assert.strictEqual(out, null);
+  assert.strictEqual(sent.length, 1);
+  assert.strictEqual(sent[0][0], SID);
+  assert.strictEqual(sent[0][1], 'Run the tests');
+  assert.strictEqual(sent[0][2].thread, false);
+  assert.strictEqual(sent[0][2].retouch, true);
+  assert.strictEqual(fs.readFileSync(path.join(ib.starts, 'p-1-a.sid'), 'utf8'), SID);
+  assert.ok(fs.existsSync(path.join(ib.starts, `${SID}.claimed`)));
+  assert.strictEqual(fs.readFileSync(path.join(ib.starts, `${SID}.json`), 'utf8'), '{}');
+  assert.strictEqual(hook.wake({ session_id: SID, file_path: path.join(ib.starts, `${SID}.json`) }), null); // nothing left to wake with
+});
+
+test('a handoff that fails falls back to the relay\'s own delivery', () => {
+  const ib = inbox();
+  leave(ib, '1-a', 'Still delivered');
+  const at = { deliverSync: () => { throw new Error('disk full'); } };
+  const out = hook.start({ session_id: SID, cwd: ib.project, source: 'startup' }, { root: ib.root, noTouch: true, aiThreads: at });
+  const file = path.join(ib.starts, `${SID}.json`);
+  assert.deepStrictEqual(out.hookSpecificOutput.watchPaths, [file]);
+  assert.ok(!fs.existsSync(path.join(ib.starts, `${SID}.claimed`)));
+  assert.strictEqual(hook.wake({ session_id: SID, file_path: file }), 'Still delivered');
+});
+
+test('ai-threads is used only when the window named its home and its hooks are installed', () => {
+  const root = tmp(), home = tmp();
+  const runtime = path.join(home, 'runtime');
+  fs.mkdirSync(runtime, { recursive: true });
+  const fake = (installed) => fs.writeFileSync(path.join(runtime, 'index.js'),
+    `module.exports = { open: (o) => ({ home: o.home }), claudeCode: { install: { status: () => ({ installed: ${installed} }) } } };`);
+  fake(true);
+  assert.strictEqual(hook.aiThreads(root), null); // no ai-threads.json
+  relay.writeAtomic(path.join(root, hook.HANDOFF), { home });
+  const fresh = (p) => { delete require.cache[require.resolve(p)]; return require(p); };
+  assert.deepStrictEqual(hook.aiThreads(root, { load: fresh }), { home });
+  fake(false);
+  assert.strictEqual(hook.aiThreads(root, { load: fresh }), null); // hooks not installed for this account
+  relay.writeAtomic(path.join(root, hook.HANDOFF), { home: path.join(home, 'missing') });
+  assert.strictEqual(hook.aiThreads(root, { load: fresh }), null); // nothing loads there
+});
+
 test('as Claude Code runs it: start prints the watch, wake exits 2 with the prompt on stderr', () => {
   const ib = inbox();
   leave(ib, '1-a', 'Fix the build');
