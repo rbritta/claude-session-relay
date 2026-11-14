@@ -89,6 +89,33 @@ test('wake delivers the prompt once, only to its own conversation', () => {
   assert.strictEqual(hook.wake({ session_id: SID, file_path: file }), null, 'already delivered');
 });
 
+test('wake never removes the watched file: it stays, emptied in place, beside the delivered marker', () => {
+  const ib = inbox();
+  leave(ib, '1-a', 'Run the tests');
+  hook.start({ session_id: SID, cwd: ib.project, source: 'startup' }, { root: ib.root, noTouch: true });
+  const file = path.join(ib.starts, `${SID}.json`);
+  assert.strictEqual(hook.wake({ session_id: SID, file_path: file }), 'Run the tests');
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), '{}', 'the watched file is still there, emptied');
+  assert.ok(fs.existsSync(path.join(ib.starts, `${SID}.claimed`)), 'the marker says it was delivered');
+  // the rewrite fires FileChanged again: nothing to deliver, nothing changes
+  assert.strictEqual(hook.wake({ session_id: SID, file_path: file }), null);
+  assert.strictEqual(fs.readFileSync(file, 'utf8'), '{}');
+});
+
+test('delivered start files go after 7 days, fresh ones and waiting prompts stay', () => {
+  const ib = inbox();
+  leave(ib, '1-a', 'Run the tests');
+  hook.start({ session_id: SID, cwd: ib.project, source: 'startup' }, { root: ib.root, noTouch: true });
+  hook.wake({ session_id: SID, file_path: path.join(ib.starts, `${SID}.json`) });
+  leave(ib, '2-b', 'Another prompt');
+  const now = Date.now();
+  assert.deepStrictEqual(hook.pruneDelivered(ib.starts, now + hook.DELIVERED_MS - 60000), [], 'a week not yet passed');
+  assert.deepStrictEqual(hook.pruneDelivered(ib.starts, now + hook.DELIVERED_MS + 60000), [`${SID}.claimed`]);
+  // p-1-a.sid is the window's to read and remove (startConversation); no window runs here
+  assert.deepStrictEqual(fs.readdirSync(ib.starts).filter((f) => !f.endsWith('.sid')).sort(), ['p-2-b.json'],
+    'the delivered file and its marker went, the waiting prompt stayed');
+});
+
 test('as Claude Code runs it: start prints the watch, wake exits 2 with the prompt on stderr', () => {
   const ib = inbox();
   leave(ib, '1-a', 'Fix the build');

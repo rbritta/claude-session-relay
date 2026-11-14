@@ -2,7 +2,7 @@
   "name": "claude-session-relay",
   "displayName": "Claude Session Relay",
   "description": "Drive the Claude Code tabs of any VS Code window from a script or a web panel: open, resume, start a conversation that runs its prompt on its own, rename and close sessions through a plain file inbox.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "rbritta",
   "license": "MIT",
   "icon": "docs/icon.png",

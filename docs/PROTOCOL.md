@@ -19,7 +19,10 @@ to it.
 
 - **`<workspace>`** is the window's name: the first `claudeSessionRelay.workspaces` rule
   that matches one of its folders, else the first folder's base name. Names are
-  lower-cased and reduced to `a-z 0-9 . _ -`.
+  lower-cased and reduced to `a-z 0-9 . _ -`. The rule is a shared convention: a list of
+  `{ "pattern": <regex over the folder path>, "name": <text that may use $1> }`, tried in order,
+  first match wins. Other tools that name the same workspaces (ai-signalbox's `workspaces`
+  config) read the same rule, so one list written once names a folder the same way in both.
 - **`<id>`** is any string of `A-Z a-z 0-9 _ -`. Requests are handled in `id` order, so a
   timestamp prefix (`1730518211000-a1b2c3`) keeps them first-in, first-out.
 
@@ -83,7 +86,7 @@ them, both `node "<root>/hook.js" ...`, written to Claude Code's user settings b
 |---|---|---|
 | 1 | window | Writes `<workspace>/starts/p-<id>.json` (`{ request, prompt, at }`) and opens an empty Claude tab. |
 | 2 | `hook.js start` (`SessionStart`, source `startup` only) | In the new conversation: finds the window whose folder holds its working directory, renames the oldest prompt younger than 2 minutes to `starts/<session>.json` (the rename is the claim), writes `starts/p-<id>.sid` with the session id and returns `watchPaths` with that file. A detached `hook.js touch` rewrites the file 3, 8 and 20 seconds later, once Claude Code watches it. |
-| 3 | `hook.js wake` (`FileChanged`, `asyncRewake`) | Sees its own `starts/<session>.json`, deletes it and exits 2 with the prompt on stderr: Claude Code hands it to the conversation as the thing to work on. |
+| 3 | `hook.js wake` (`FileChanged`, `asyncRewake`) | Sees its own `starts/<session>.json`, creates `starts/<session>.claimed` exclusively (the claim), rewrites the file in place as `{}` and exits 2 with the prompt on stderr: Claude Code hands it to the conversation as the thing to work on. The watched file is never removed or renamed, because Claude Code keeps one watcher per conversation, shared with other tools' hooks. A delivered file and its marker are removed after 7 days, the next time a start is claimed in that window. |
 | 4 | window | Reads `p-<id>.sid`, deletes it and replies `started: true` with the session. |
 
 Every command carries the tag `#claude-session-relay` at the end (a comment in a POSIX

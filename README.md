@@ -88,7 +88,9 @@ uses that, and nothing else.
 2. In the conversation that was just born, the hook's `start` step (a `SessionStart` hook)
    claims that prompt and asks Claude Code to watch it.
 3. The hook's `wake` step (a `FileChanged` hook with `asyncRewake`) hands the prompt to
-   the conversation, which starts working. The prompt file is deleted.
+   the conversation, which starts working. The prompt file is emptied in place, never deleted:
+   Claude Code keeps one file watcher per conversation, shared with any other tool's hook, and a
+   watched file that disappears can take it down. Delivered files are cleaned up after 7 days.
 4. The reply says `"started": true` and the new `"session"` id.
 
 **What the installer changes:** two entries in Claude Code's user settings

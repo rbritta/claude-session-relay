@@ -8,6 +8,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _No unreleased changes yet._
 
+## [0.2.1] - 2026-11-14
+
+### Fixed
+- **Auto-start no longer deletes the file Claude Code watches.** Claude Code keeps one file watcher per
+  conversation, shared by every hook that asks for one; deleting the start file after the wake could take
+  that watcher down for another tool watching in the same conversation. The wake now claims the file with an
+  exclusive `<session>.claimed` marker and empties it in place; delivered files and markers are removed after
+  7 days.
+
+### Documentation
+- The workspace naming rule (`{ pattern, name }`, first match wins) is documented as a shared convention that
+  other tools naming the same folders can read.
+
 ## [0.2.0] - 2026-11-04
 
 ### Added

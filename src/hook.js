@@ -16,8 +16,11 @@
  *      which session took it (p-<id>.sid) and asks Claude Code to watch the file.
  *   3. A detached `hook.js touch` rewrites the file a few times, once Claude
  *      Code's watcher is up.
- *   4. `hook.js wake` (FileChanged) sees its own session's file, removes it and
- *      exits 2 with the prompt: the conversation starts working on it.
+ *   4. `hook.js wake` (FileChanged) sees its own session's file, marks it
+ *      delivered (<session>.claimed), rewrites it in place as `{}` and exits 2
+ *      with the prompt: the conversation starts working on it. The watched file
+ *      is never removed, since Claude Code's one watcher per conversation is
+ *      shared with any other tool's hook; delivered files go after 7 days.
  *
  * Conversations you open yourself never find a file to claim, so the hook does
  * nothing in them. It needs only Node and reads the inbox it lives in (the
@@ -33,6 +36,7 @@ const ROOT = process.env.RELAY_INBOX || __dirname;
 const PENDING = /^p-[\w-]+\.json$/;
 const FRESH_MS = 2 * 60 * 1000; // a start nobody claimed in this time belongs to nobody
 const TOUCHES_S = [3, 8, 20]; // the watcher comes up only after the start hook returns
+const DELIVERED_MS = 7 * 24 * 60 * 60 * 1000; // a delivered start file is removed after this
 
 const norm = (p) => {
   const v = path.resolve(String(p || '')).replace(/[\\/]+$/, '');
@@ -67,6 +71,7 @@ function claimStart(cwd, sid, { root = ROOT, now = Date.now() } = {}) {
   const ws = workspaceFor(cwd, root);
   if (!ws) return null;
   const dir = path.join(ws, 'starts');
+  pruneDelivered(dir, now);
   let files = [];
   try { files = fs.readdirSync(dir).filter((f) => PENDING.test(f)).sort(); } catch (_) { return null; }
   for (const f of files) {
@@ -95,25 +100,58 @@ function start(input, opts = {}) {
   return { hookSpecificOutput: { hookEventName: 'SessionStart', watchPaths: [file] } };
 }
 
-/** FileChanged: this session's own start file. Returns the prompt to wake with, or null. */
+/** The marker that says a start file was delivered: <starts>/<session>.claimed, never watched. */
+const claimedOf = (file) => `${file.slice(0, -'.json'.length)}.claimed`;
+
+/**
+ * FileChanged: this session's own start file. Returns the prompt to wake with, or null.
+ *
+ * The claim is the marker, created exclusively, and the watched file stays where it is, rewritten in
+ * place as `{}`. Claude Code keeps one file watcher per conversation, shared by every hook that asks
+ * for one; removing or renaming a watched file can take it down for the other tools watching in the
+ * same conversation, so this hook never does either.
+ */
 function wake(input) {
   const sid = input.session_id, file = input.file_path;
   if (!sid || !file || input.agent_id) return null;
   if (path.basename(file) !== `${sid}.json` || path.basename(path.dirname(file)) !== 'starts') return null;
   const body = readJson(file);
-  try { fs.unlinkSync(file); } catch (_) { return null; } // already delivered
   const prompt = body && String(body.prompt || '').trim();
-  return prompt || null;
+  if (!prompt) return null;
+  try { fs.closeSync(fs.openSync(claimedOf(file), 'wx')); } catch (_) { return null; } // already delivered
+  try { fs.writeFileSync(file, '{}'); } catch (_) { /* the marker already says it was delivered */ }
+  return prompt;
 }
 
 /** Rewrites the file in place (a rename would lose Claude Code's watcher) until the session took it. */
 async function touch(file) {
   for (const s of TOUCHES_S) {
     await new Promise((r) => setTimeout(r, s * 1000));
+    if (fs.existsSync(claimedOf(file))) return; // delivered
     let raw;
-    try { raw = fs.readFileSync(file, 'utf8'); } catch (_) { return; } // delivered
+    try { raw = fs.readFileSync(file, 'utf8'); } catch (_) { return; }
     try { fs.writeFileSync(file, raw); } catch (_) { return; }
   }
+}
+
+/**
+ * Removes the start files delivered long ago with their markers. A conversation that old has almost
+ * surely moved its watcher on; a fresh one keeps its file until then, so its watcher is never touched.
+ */
+function pruneDelivered(dir, now = Date.now()) {
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.claimed')); } catch (_) { return []; }
+  const gone = [];
+  for (const f of files) {
+    const marker = path.join(dir, f);
+    try {
+      if (now - fs.statSync(marker).mtimeMs <= DELIVERED_MS) continue;
+      try { fs.unlinkSync(`${marker.slice(0, -'.claimed'.length)}.json`); } catch (_) { /* gone */ }
+      fs.unlinkSync(marker);
+      gone.push(f);
+    } catch (_) { /* in use or gone */ }
+  }
+  return gone;
 }
 
 function readInput() {
@@ -135,4 +173,4 @@ if (require.main === module) {
   } catch (_) { /* a hook never breaks the conversation it runs in */ }
 }
 
-module.exports = { PENDING, FRESH_MS, workspaceFor, claimStart, start, wake, touch };
+module.exports = { PENDING, FRESH_MS, DELIVERED_MS, workspaceFor, claimStart, start, wake, touch, pruneDelivered };
