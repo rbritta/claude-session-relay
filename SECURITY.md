@@ -1,5 +1,14 @@
 # Security
 
+## Supported versions
+
+Only the latest minor release gets fixes.
+
+| Version | Supported |
+|---|---|
+| 0.3.x | yes |
+| older | no |
+
 ## Trust model
 
 - **Whoever can write to the inbox can drive your Claude Code tabs**: open conversations,
@@ -26,6 +35,6 @@
 
 ## Reporting a vulnerability
 
-Please report suspected vulnerabilities privately via a
-[GitHub security advisory](https://github.com/rbritta/claude-session-relay/security/advisories/new)
+Please report suspected vulnerabilities privately through
+[GitHub private vulnerability reporting](https://github.com/rbritta/claude-session-relay/security/advisories/new)
 rather than a public issue. You can expect an initial response within a few days.

@@ -1,7 +1,7 @@
 'use strict';
 /*
  * Auto-start: the hook (src/hook.js), its installer (src/install.js) and
- * relay.startConversation, with plain Node: node test/hook.test.js
+ * relay.startConversation, with node:test: node --test test/
  *
  * Nothing here touches the real Claude settings or inbox: every test gets its
  * own temp folders, and the hook is run as Claude Code runs it (a child process
@@ -12,6 +12,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
+const { test } = require('node:test');
 const relay = require('../src/relay');
 const hook = require('../src/hook');
 const installer = require('../src/install');
@@ -21,9 +22,6 @@ const SID2 = '8b0c1f8e-5d0a-4a0e-9a59-3a3c5b1f0e11';
 const HOOK = path.join(__dirname, '..', 'src', 'hook.js');
 const BIN = path.join(__dirname, '..', 'bin', 'relay.js');
 
-let failed = 0;
-const queue = [];
-const test = (name, fn) => queue.push([name, fn]);
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'csr-hook-'));
 
 /* an inbox with one window, "api", whose workspace folder is `project` */
@@ -224,11 +222,3 @@ test('relay hook install | status | remove from the command line', () => {
   assert.strictEqual(cli('remove').installed, false);
   assert.strictEqual(cli('status').installed, false);
 });
-
-(async () => {
-  for (const [name, fn] of queue) {
-    try { await fn(); console.log(`ok   ${name}`); } catch (e) { failed++; console.log(`FAIL ${name}\n     ${e.stack}`); }
-  }
-  console.log(failed ? `\n${failed} failed` : '\nall passed');
-  process.exit(failed ? 1 : 0);
-})();

@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work the way the README or the protocol says it does.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please search the open issues first. A security problem goes through [SECURITY.md](https://github.com/rbritta/claude-session-relay/blob/main/SECURITY.md), not here.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The Claude Session Relay version (Extensions view) or a commit.
+      placeholder: 0.3.1
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The request you wrote (or the `relay` command) and the reply. Made-up names, folders and prompts only.
+      render: json
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: VS Code version, Claude Code extension version, OS, and Node version for the `relay` command line.
+      placeholder: VS Code 1.10x, Claude Code 2.x, Windows 11, Node 24
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: The *Claude Session Relay* channel from View > Output. Remove folder names and prompts you do not want to share.

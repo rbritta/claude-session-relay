@@ -6,7 +6,27 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+## [0.3.1] - 2026-11-14
+
+No change in what the extension does: the project around it.
+
+### Added
+- `ci.yml` runs the build and the tests on Ubuntu and Windows with Node 22 and 24, with a coverage summary in the
+  job log, and keeps the VSIX as an artifact.
+- The release notes are this file's section for the tagged version (`tools/release-notes.js`, which refuses a tag
+  that does not name the version in `package.json`), with tests for it and for the version.
+- Tests for the extension itself (`src/extension.js`) in a stand-in for the VS Code api: the inbox and heartbeat of a
+  window, each action mapped to Claude Code's commands, rename refused while the window has focus, the settings that
+  keep a window quiet, the ai-threads handoff file and the hook commands.
+- AGENTS.md (for AI coding agents), TODO.md (the roadmap), issue forms, a weekly Dependabot check of the workflows,
+  and a `package-lock.json` (there are no dependencies) so CI installs with `npm ci`.
+
+### Changed
+- The tests run on `node:test` (`node --test`), so each test is reported on its own and coverage comes from Node
+  itself; `npm run coverage` prints the summary.
+- The README follows the shape of its sibling projects (badges, a link line, the family table, how to develop) and
+  lists the `claudeSessionRelay.aiThreadsHome` setting.
+- The examples and test fixtures use generic paths.
 
 ## [0.3.0] - 2026-11-14
 
@@ -74,3 +94,11 @@ _No unreleased changes yet._
 - A heartbeat file per window (`.window.json`) with its folders, account, focus and tabs.
 - The `relay` command line client.
 - `claudeSessionRelay.claudeConfigDir` to listen only under one Claude account.
+
+[Unreleased]: https://github.com/rbritta/claude-session-relay/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/rbritta/claude-session-relay/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/rbritta/claude-session-relay/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/rbritta/claude-session-relay/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/rbritta/claude-session-relay/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/rbritta/claude-session-relay/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/rbritta/claude-session-relay/releases/tag/v0.1.0

@@ -10,3 +10,6 @@ docs/BRANDING.md
 .gitignore
 install.ps1
 **/*.vsix
+AGENTS.md
+TODO.md
+package-lock.json

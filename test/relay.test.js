@@ -1,21 +1,19 @@
 'use strict';
-/* The pure protocol, with plain Node: node test/relay.test.js */
+/* The pure protocol, with node:test: node --test test/ */
 const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { test } = require('node:test');
 const relay = require('../src/relay');
 
-let failed = 0;
-const queue = [];
-const test = (name, fn) => queue.push([name, fn]);
 const SID = '3007172c-30ed-48a3-a551-fc7a288b219d';
 
 test('a window is named by the first matching rule, with $1', () => {
-  const rules = [{ pattern: '^[a-z]:[\\\\/]dev[\\\\/](env\\d+)', name: '$1' }];
-  assert.strictEqual(relay.workspaceName(['D:\\dev\\env3\\src'], rules), 'env3');
-  assert.strictEqual(relay.workspaceName(['E:\\Projects\\Notes'], rules), 'notes');
-  assert.strictEqual(relay.workspaceName(['E:\\Projects\\Notes'], rules, true), null);
+  const rules = [{ pattern: '^[a-z]:[\\\\/]work[\\\\/](ws\\d+)', name: '$1' }];
+  assert.strictEqual(relay.workspaceName(['C:\\work\\ws3\\src'], rules), 'ws3');
+  assert.strictEqual(relay.workspaceName(['C:\\code\\Notes'], rules), 'notes');
+  assert.strictEqual(relay.workspaceName(['C:\\code\\Notes'], rules, true), null);
 });
 
 test('the fallback name is the base name, lower-cased and safe', () => {
@@ -29,8 +27,8 @@ test('a bad rule is skipped, not fatal', () => {
 
 test('the account filter reads CLAUDE_CONFIG_DIR', () => {
   assert.ok(relay.accountMatches('', ''));
-  assert.ok(relay.accountMatches('[\\\\/]\\.claude-work$', 'C:\\Users\\me\\.claude-work'));
-  assert.ok(!relay.accountMatches('[\\\\/]\\.claude-work$', 'C:\\Users\\me\\.claude'));
+  assert.ok(relay.accountMatches('[\\\\/]\\.claude-work$', 'C:\\accounts\\me\\.claude-work'));
+  assert.ok(!relay.accountMatches('[\\\\/]\\.claude-work$', 'C:\\accounts\\me\\.claude'));
 });
 
 test('requests are validated', () => {
@@ -169,11 +167,3 @@ test('the reply carries what the action returned', async () => {
   assert.deepStrictEqual([rep.ok, rep.started, rep.session, rep.request], [true, true, SID, '1-a']);
   fs.rmSync(dir, { recursive: true, force: true });
 });
-
-(async () => {
-  for (const [name, fn] of queue) {
-    try { await fn(); console.log(`ok   ${name}`); } catch (e) { failed++; console.log(`FAIL ${name}\n     ${e.stack}`); }
-  }
-  console.log(failed ? `\n${failed} failed` : '\nall passed');
-  process.exit(failed ? 1 : 0);
-})();

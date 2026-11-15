@@ -1,7 +1,6 @@
 'use strict';
 /*
- * The `relay` command line against a fake window, with plain Node:
- * node test/cli.test.js
+ * The `relay` command line against a fake window, with node:test: node --test test/
  *
  * The "window" is relay.serveOnce on a timer, the same loop the extension runs,
  * with a perform that records instead of touching VS Code.
@@ -11,11 +10,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
+const { test, after, afterEach } = require('node:test');
 const relay = require('../src/relay');
 
 const BIN = path.join(__dirname, '..', 'bin', 'relay.js');
 const SID = '3007172c-30ed-48a3-a551-fc7a288b219d';
 const INBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-cli-'));
+const live = new Set();
 
 const run = (...args) => new Promise((resolve) => {
   execFile(process.execPath, [BIN, ...args, '--inbox', INBOX], (err, stdout, stderr) => {
@@ -39,12 +40,15 @@ function window(name, perform = async () => {}) {
     await relay.serveOnce(dir, async (r) => { seen.push(r); await perform(r); }, { tabs: () => [{ label: 'Tab', active: true }], onReply: beat });
     busy = false;
   }, 50);
-  return { dir, seen, stop: () => clearInterval(t) };
+  const w = { dir, seen, stop: () => { clearInterval(t); live.delete(w); } };
+  live.add(w);
+  return w;
 }
 
-let failed = 0;
-const queue = [];
-const test = (name, fn) => queue.push([name, fn]);
+/* a failed assertion never leaves a window ticking, and the inbox goes at the end */
+afterEach(() => { for (const w of live) w.stop(); });
+after(() => fs.rmSync(INBOX, { recursive: true, force: true }));
+
 
 test('new: the request reaches the window and the reply comes back', async () => {
   const w = window('api');
@@ -109,12 +113,3 @@ test('list tells live windows from stale heartbeats', async () => {
   assert.strictEqual(by.alive, true);
   assert.strictEqual(by.dead, false);
 });
-
-(async () => {
-  for (const [name, fn] of queue) {
-    try { await fn(); console.log(`ok   ${name}`); } catch (e) { failed++; console.log(`FAIL ${name}\n     ${e.stack}`); }
-  }
-  fs.rmSync(INBOX, { recursive: true, force: true });
-  console.log(failed ? `\n${failed} failed` : '\nall passed');
-  process.exit(failed ? 1 : 0);
-})();

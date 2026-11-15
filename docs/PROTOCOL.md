@@ -118,7 +118,7 @@ window closes cleanly:
   "folders": ["C:\\src\\My API"],
   "pid": 12345,
   "version": "0.2.0",
-  "account": "C:\\Users\\me\\.claude",
+  "account": "C:\\accounts\\me\\.claude",
   "focused": false,
   "tabs": [{ "label": "Fix flaky tests", "active": true }],
   "at": "2026-11-02T03:30:00.000Z"

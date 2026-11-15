@@ -1,19 +1,21 @@
-<div align="center">
-
-<img src="docs/logo.png" width="120" alt="Claude Session Relay logo" />
-
 # Claude Session Relay
 
-**Drive the Claude Code tabs of any VS Code window from a script, a bot or a web panel.**
+<img src="docs/logo.png" width="96" align="right" alt="Claude Session Relay logo" />
 
-[![build](https://github.com/rbritta/claude-session-relay/actions/workflows/build.yml/badge.svg)](https://github.com/rbritta/claude-session-relay/actions/workflows/build.yml)
+A VS Code extension that drives the Claude Code tabs of any VS Code window from a script, a bot or a web panel: it
+opens a conversation with a task typed in (or already running), brings an old one back, renames or closes a tab,
+through a plain file inbox. For people who run several VS Code windows, one per project, and want something outside
+VS Code to hand work to the right one.
+
+[![CI](https://github.com/rbritta/claude-session-relay/actions/workflows/ci.yml/badge.svg)](https://github.com/rbritta/claude-session-relay/actions/workflows/ci.yml)
 [![release](https://img.shields.io/github/v/release/rbritta/claude-session-relay?sort=semver&color=e27350)](https://github.com/rbritta/claude-session-relay/releases/latest)
-[![downloads](https://img.shields.io/github/downloads/rbritta/claude-session-relay/total?color=4ca54c)](https://github.com/rbritta/claude-session-relay/releases)
+[![Marketplace](https://img.shields.io/visual-studio-marketplace/v/rbritta.claude-session-relay?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=rbritta.claude-session-relay)
 [![license: MIT](https://img.shields.io/badge/license-MIT-e8b74e.svg)](LICENSE)
 
-</div>
+[Install](#install) · [Quick start](#quick-start) · [Auto-start](#auto-start) · [Protocol](docs/PROTOCOL.md) ·
+[Settings](#settings) · [Command line](#the-relay-command-line) · [For AI agents](AGENTS.md) · [Roadmap](TODO.md)
 
----
+## What it does
 
 You run several VS Code windows, one per project, each with its own
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) conversations. Something
@@ -25,8 +27,6 @@ window has focus, with no `vscode://` link and no permission prompt.
 
 It is deliberately boring: plain files, no server, no port, no network. Anything that
 can write a file can use it.
-
-## What it does
 
 | Action | What happens in the window |
 |---|---|
@@ -41,9 +41,11 @@ Every reply carries the list of Claude tabs in the window, and each window keeps
 heartbeat file saying who it is, which folders it has open and what tabs it shows - so
 a panel can list your sessions without asking.
 
-## Quick start
+## Install
 
-**1. Install** (PowerShell; downloads the latest release and installs it into VS Code):
+From the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rbritta.claude-session-relay)
+(search for *Claude Session Relay* in the Extensions view), or with PowerShell, which downloads the latest release
+and installs it into VS Code:
 
 ```powershell
 irm https://raw.githubusercontent.com/rbritta/claude-session-relay/main/install.ps1 -OutFile "$env:TEMP\csr.ps1"; & "$env:TEMP\csr.ps1"
@@ -52,6 +54,10 @@ irm https://raw.githubusercontent.com/rbritta/claude-session-relay/main/install.
 Or download `claude-session-relay.vsix` from the
 [latest release](https://github.com/rbritta/claude-session-relay/releases/latest) and run
 `code --install-extension claude-session-relay.vsix`.
+
+## Quick start
+
+**1. Install it** (above).
 
 **2. Open a project window.** It starts listening as the folder's name (lower-cased),
 for example `my-api` for `C:\src\My API`. *View > Output > Claude Session Relay*
@@ -146,11 +152,12 @@ including every field, are in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 | `claudeSessionRelay.workspaces` | `[]` | Naming rules, tried in order: `{ "pattern": "<regex over the folder path>", "name": "<may use $1>" }`. |
 | `claudeSessionRelay.onlyMatchingWorkspaces` | `false` | Listen only in windows that match a rule. |
 | `claudeSessionRelay.claudeConfigDir` | *(empty)* | Listen only when `CLAUDE_CONFIG_DIR` matches this regex - handy when one machine runs two Claude accounts (work and personal) in separate VS Code profiles. |
+| `claudeSessionRelay.aiThreadsHome` | *(empty)* | Home folder of [ai-threads](https://github.com/rbritta/ai-threads). When set, and its hooks are installed for the conversation's Claude account, auto-start hands the prompt to ai-threads (see [Auto-start](#auto-start)). `~` and `%VAR%` are expanded. |
 
-Example: numbered work environments, and nothing else.
+Example: numbered workspaces (`C:\work\ws1`, `C:\work\ws2`, ...), and nothing else.
 
 ```jsonc
-"claudeSessionRelay.workspaces": [{ "pattern": "^[a-z]:\\\\dev\\\\(env\\d+)", "name": "$1" }],
+"claudeSessionRelay.workspaces": [{ "pattern": "[\\\\/]work[\\\\/](ws\\d+)", "name": "$1" }],
 "claudeSessionRelay.onlyMatchingWorkspaces": true
 ```
 
@@ -177,10 +184,55 @@ Example: numbered work environments, and nothing else.
 - **Not an Anthropic product.** This is a community extension that uses the public
   commands of the Claude Code extension; those commands may change between releases.
 
+## The `relay` command line
+
+```
+relay list
+relay new   <workspace> [--prompt "text"] [--start]
+relay open  <workspace> <session> [--prompt "text"]
+relay close <workspace> <session>
+relay rename <workspace> <session> <name>
+relay tabs  <workspace>
+relay close-window <workspace>
+relay hook install | remove | status
+```
+
+Options: `--inbox <dir>`, `--timeout <seconds>` (15, or 45 with `--start`), `--no-wait`. It prints the reply as JSON
+and exits 1 when the action failed. From a clone it is `node bin/relay.js`, standard library only.
+
+## Part of a small family
+
+Each works alone and shares no code with the others; they meet in plain files and one naming rule (the workspace
+`{ pattern, name }` rules).
+
+| Project | What it does |
+|---|---|
+| [ai-signalbox](https://github.com/rbritta/ai-signalbox) | Many sessions on one machine: who is doing what, leases, messages, jobs, the workflow. Its `close` asks this relay to close a session's tab and window. |
+| [ai-threads](https://github.com/rbritta/ai-threads) | A person and one session: the threads, and getting each message into the session. Auto-start can hand it the prompt (`claudeSessionRelay.aiThreadsHome`). |
+| [chat-thread](https://github.com/rbritta/chat-thread) | The conversation on screen: threads, bubbles, ticks, the message box. |
+| [postit-board](https://github.com/rbritta/postit-board) | A board of sticky notes for an app's home screen: people move notes, the app pins its own. |
+| **[claude-session-relay](https://github.com/rbritta/claude-session-relay)** | VS Code: open, find and close Claude Code tabs and windows from outside. This repository. |
+
+## Develop
+
+```
+git clone https://github.com/rbritta/claude-session-relay
+cd claude-session-relay
+npm test            # node:test, nothing to install
+npm run coverage    # the same, with a coverage summary
+npm run build       # packs dist/claude-session-relay.vsix
+```
+
+The 52 tests cover the protocol (`src/relay.js`), the `relay` command line against a simulated window, the auto-start
+hook and its installer, the extension itself in a stand-in for the VS Code api, and the release notes; how Claude
+Code reacts to its commands is checked by hand in a real window. CI runs the build and the tests on Ubuntu and Windows with Node 22 and 24; a `v*` tag publishes a GitHub
+Release with the VSIX and the CHANGELOG section as its notes. Details in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Contributing
 
-Issues and pull requests are welcome - see [CONTRIBUTING.md](CONTRIBUTING.md).
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), the
+[Code of Conduct](CODE_OF_CONDUCT.md), and [SECURITY.md](SECURITY.md) for reporting a vulnerability.
 
 ## License
 
-[MIT](LICENSE) © Romulo Britta
+[MIT](LICENSE)

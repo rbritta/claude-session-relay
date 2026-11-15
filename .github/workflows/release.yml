@@ -1,6 +1,7 @@
 name: release
 
-# Tag a commit `vX.Y.Z` to build the VSIX and publish it as a GitHub Release.
+# Tag a commit `vX.Y.Z` (the version in package.json) to test it, build the VSIX and publish a GitHub Release whose
+# notes are the CHANGELOG section of that version. The Marketplace publish stays a manual step (CONTRIBUTING.md).
 on:
   push:
     tags: [ 'v*' ]
@@ -22,6 +23,11 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Release notes (the tag must name the version)
+        run: |
+          node tools/release-notes.js "$GITHUB_REF_NAME" > release-notes.md
+          printf '\n---\n\nDownload `claude-session-relay.vsix` below and install it with\n`code --install-extension claude-session-relay.vsix`, or get it from the VS Code Marketplace.\n' >> release-notes.md
+
       - name: Test
         run: npm test
 
@@ -32,8 +38,4 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: dist/claude-session-relay.vsix
-          generate_release_notes: true
-          body: |
-            Download `claude-session-relay.vsix` below and install it with
-            `code --install-extension claude-session-relay.vsix`, or get it from the
-            VS Code Marketplace.
+          body_path: release-notes.md
